@@ -9,7 +9,7 @@
 
 typedef struct {
 	unsigned char *data;
-	int len;
+	size_t len;
 	int alloc;  // also implies a NULL-terminated string
 } cmark_chunk;
 
@@ -90,7 +90,7 @@ static inline cmark_chunk cmark_chunk_literal(const char *data)
 	return c;
 }
 
-static inline cmark_chunk cmark_chunk_dup(const cmark_chunk *ch, int pos, int len)
+static inline cmark_chunk cmark_chunk_dup(const cmark_chunk *ch, size_t pos, size_t len)
 {
 	cmark_chunk c = {ch->data + pos, len, 0};
 	return c;

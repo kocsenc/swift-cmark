@@ -165,7 +165,7 @@ S_render_node(cmark_node *node, cmark_event_type ev_type,
 			S_render_sourcepos(node, html, options);
 			cmark_strbuf_puts(html, "><code>");
 		} else {
-			int first_tag = 0;
+			size_t first_tag = 0;
 			while (first_tag < node->as.code.info.len &&
 			       node->as.code.info.data[first_tag] != ' ') {
 				first_tag += 1;

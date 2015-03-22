@@ -36,7 +36,7 @@ typedef struct delimiter {
 	struct delimiter *previous;
 	struct delimiter *next;
 	cmark_node *inl_text;
-	int position;
+	size_t position;
 	unsigned char delim_char;
 	bool can_open;
 	bool can_close;
@@ -45,7 +45,7 @@ typedef struct delimiter {
 
 typedef struct {
 	cmark_chunk input;
-	int pos;
+	size_t pos;
 	cmark_reference_map *refmap;
 	delimiter *last_delim;
 } subject;
@@ -968,7 +968,7 @@ static int subject_find_special_char(subject *subj, int options)
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	};
 
-	int n = subj->pos + 1;
+	size_t n = subj->pos + 1;
 
 	while (n < subj->input.len) {
 		if (SPECIAL_CHARS[subj->input.data[n]])
