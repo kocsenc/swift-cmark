@@ -4,7 +4,6 @@
 #include <errno.h>
 #include "config.h"
 #include "cmark.h"
-#include "debug.h"
 #include "bench.h"
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
@@ -17,15 +16,19 @@ typedef enum {
 	FORMAT_HTML,
 	FORMAT_XML,
 	FORMAT_MAN,
+	FORMAT_COMMONMARK,
+	FORMAT_LATEX
 } writer_format;
 
 void print_usage()
 {
 	printf("Usage:   cmark [FILE*]\n");
 	printf("Options:\n");
-	printf("  --to, -t FORMAT  Specify output format (html, xml, man)\n");
+	printf("  --to, -t FORMAT  Specify output format (html, xml, man, commonmark, latex)\n");
+	printf("  --width WIDTH    Specify wrap width (default 0 = nowrap)\n");
 	printf("  --sourcepos      Include source position attribute\n");
 	printf("  --hardbreaks     Treat newlines as hard line breaks\n");
+	printf("  --safe           Suppress raw HTML and dangerous URLs\n");
 	printf("  --smart          Use smart punctuation\n");
 	printf("  --normalize      Consolidate adjacent text nodes\n");
 	printf("  --help, -h       Print usage information\n");
@@ -33,9 +36,10 @@ void print_usage()
 }
 
 static void print_document(cmark_node *document, writer_format writer,
-                           int options)
+                           int options, int width)
 {
 	char *result;
+
 	switch (writer) {
 	case FORMAT_HTML:
 		result = cmark_render_html(document, options);
@@ -44,7 +48,13 @@ static void print_document(cmark_node *document, writer_format writer,
 		result = cmark_render_xml(document, options);
 		break;
 	case FORMAT_MAN:
-		result = cmark_render_man(document, options);
+		result = cmark_render_man(document, options, width);
+		break;
+	case FORMAT_COMMONMARK:
+		result = cmark_render_commonmark(document, options, width);
+		break;
+	case FORMAT_LATEX:
+		result = cmark_render_latex(document, options, width);
 		break;
 	default:
 		fprintf(stderr, "Unknown format %d\n", writer);
@@ -62,6 +72,8 @@ int main(int argc, char *argv[])
 	cmark_parser *parser;
 	size_t bytes;
 	cmark_node *document;
+	int width = 0;
+	char *unparsed;
 	writer_format writer = FORMAT_HTML;
 	int options = CMARK_OPT_DEFAULT;
 
@@ -74,7 +86,7 @@ int main(int argc, char *argv[])
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--version") == 0) {
 			printf("cmark %s", CMARK_VERSION_STRING);
-			printf(" - CommonMark converter (c) 2014 John MacFarlane\n");
+			printf(" - CommonMark converter\n(C) 2014, 2015 John MacFarlane\n");
 			exit(0);
 		} else if (strcmp(argv[i], "--sourcepos") == 0) {
 			options |= CMARK_OPT_SOURCEPOS;
@@ -82,12 +94,31 @@ int main(int argc, char *argv[])
 			options |= CMARK_OPT_HARDBREAKS;
 		} else if (strcmp(argv[i], "--smart") == 0) {
 			options |= CMARK_OPT_SMART;
+		} else if (strcmp(argv[i], "--safe") == 0) {
+			options |= CMARK_OPT_SAFE;
 		} else if (strcmp(argv[i], "--normalize") == 0) {
 			options |= CMARK_OPT_NORMALIZE;
+		} else if (strcmp(argv[i], "--validate-utf8") == 0) {
+			options |= CMARK_OPT_VALIDATE_UTF8;
 		} else if ((strcmp(argv[i], "--help") == 0) ||
 		           (strcmp(argv[i], "-h") == 0)) {
 			print_usage();
 			exit(0);
+		} else if (strcmp(argv[i], "--width") == 0) {
+			i += 1;
+			if (i < argc) {
+				width = (int)strtol(argv[i], &unparsed, 10);
+				if (unparsed && strlen(unparsed) > 0) {
+					fprintf(stderr,
+					        "failed parsing width '%s' at '%s'\n",
+					        argv[i], unparsed);
+					exit(1);
+				}
+			} else {
+				fprintf(stderr,
+				        "--width requires an argument\n");
+				exit(1);
+			}
 		} else if ((strcmp(argv[i], "-t") == 0) ||
 		           (strcmp(argv[i], "--to") == 0)) {
 			i += 1;
@@ -98,6 +129,10 @@ int main(int argc, char *argv[])
 					writer = FORMAT_HTML;
 				} else if (strcmp(argv[i], "xml") == 0) {
 					writer = FORMAT_XML;
+				} else if (strcmp(argv[i], "commonmark") == 0) {
+					writer = FORMAT_COMMONMARK;
+				} else if (strcmp(argv[i], "latex") == 0) {
+					writer = FORMAT_LATEX;
 				} else {
 					fprintf(stderr,
 					        "Unknown format %s\n", argv[i]);
@@ -153,7 +188,7 @@ int main(int argc, char *argv[])
 	cmark_parser_free(parser);
 
 	start_timer();
-	print_document(document, writer, options);
+	print_document(document, writer, options, width);
 	end_timer("print_document");
 
 	start_timer();

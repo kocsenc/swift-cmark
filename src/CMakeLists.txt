@@ -9,14 +9,13 @@ set(HEADERS
   iterator.h
   chunk.h
   references.h
-  debug.h
   bench.h
   utf8.h
   scanners.h
   inlines.h
-  html_unescape.h
   houdini.h
   cmark_ctype.h
+  render.h
   )
 set(LIBRARY_SOURCES
   cmark.c
@@ -29,10 +28,12 @@ set(LIBRARY_SOURCES
   utf8.c
   buffer.c
   references.c
+  render.c
   man.c
   xml.c
   html.c
-  html_unescape.gperf
+  commonmark.c
+  latex.c
   houdini_href_e.c
   houdini_html_e.c
   houdini_html_u.c
@@ -66,8 +67,8 @@ set_target_properties(${PROGRAM} PROPERTIES
   COMPILE_FLAGS -DCMARK_STATIC_DEFINE)
 
 # Check integrity of node structure when compiled as debug:
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -pg -DCMARK_DEBUG_NODES")
-set(CMAKE_LINKER_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -pg")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DCMARK_DEBUG_NODES")
+set(CMAKE_LINKER_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG}")
 
 set(CMAKE_C_FLAGS_PROFILE "${CMAKE_C_FLAGS_RELEASE} -pg")
 set(CMAKE_LINKER_PROFILE "${CMAKE_LINKER_FLAGS_RELEASE} -pg")
@@ -75,17 +76,20 @@ set(CMAKE_LINKER_PROFILE "${CMAKE_LINKER_FLAGS_RELEASE} -pg")
 if (${CMAKE_MAJOR_VERSION} GREATER 1 AND ${CMAKE_MINOR_VERSION} GREATER 8)
   set(CMAKE_C_VISIBILITY_PRESET hidden)
   set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
-elseif(CMAKE_COMPILER_IS_GNUCC OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+elseif(CMAKE_COMPILER_IS_GNUCC OR ${CMAKE_C_COMPILER_ID} STREQUAL "Clang")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden")
 endif ()
 
 add_library(${LIBRARY} SHARED ${LIBRARY_SOURCES})
 add_library(${STATICLIBRARY} STATIC ${LIBRARY_SOURCES})
-# Include minor version in soname as long as major version is 0.
+# Include minor version and patch level in soname for now.
 set_target_properties(${LIBRARY} PROPERTIES
   OUTPUT_NAME "cmark"
-  SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+  SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}
   VERSION ${PROJECT_VERSION})
+set_target_properties(${STATICLIBRARY} PROPERTIES
+  COMPILE_FLAGS -DCMARK_STATIC_DEFINE
+  POSITION_INDEPENDENT_CODE ON)
 
 if (MSVC)
   set_target_properties(${STATICLIBRARY} PROPERTIES
@@ -108,6 +112,8 @@ if (MSVC)
     APPEND PROPERTY LINK_FLAGS /INCREMENTAL:NO)
 endif(MSVC)
 
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS ON)
+include (InstallRequiredSystemLibraries)
 install(TARGETS ${PROGRAM} ${LIBRARY}
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
@@ -123,6 +129,7 @@ install(FILES
 # Feature tests
 include(CheckIncludeFile)
 include(CheckCSourceCompiles)
+include(CheckCSourceRuns)
 include(CheckSymbolExists)
 CHECK_INCLUDE_FILE(stdbool.h HAVE_STDBOOL_H)
 CHECK_C_SOURCE_COMPILES(
@@ -132,6 +139,10 @@ CHECK_C_SOURCE_COMPILES("
   int f(void) __attribute__ (());
   int main() { return 0; }
 " HAVE___ATTRIBUTE__)
+CHECK_C_SOURCE_RUNS("
+  #include <stdio.h>
+  int main() { return snprintf(NULL, 0, \"123\") == 3 ? 0 : 1; }
+" HAVE_C99_SNPRINTF)
 CHECK_SYMBOL_EXISTS(va_copy stdarg.h HAVE_VA_COPY)
 
 CONFIGURE_FILE(
@@ -159,3 +170,7 @@ endif()
 if($ENV{TIMER})
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTIMER=1")
 endif($ENV{TIMER})
+
+if(CMAKE_BUILD_TYPE STREQUAL "Ubsan")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=undefined")
+endif()
